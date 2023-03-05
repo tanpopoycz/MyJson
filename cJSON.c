@@ -1771,7 +1771,7 @@ static cJSON_bool print_object(const cJSON * const item, printbuffer * const out
         *output_pointer++ = ':';
         if (output_buffer->format)
         {
-            *output_pointer++ = '\t';
+            *output_pointer++ = ' ';
         }
         output_buffer->offset += length;
 
@@ -2469,6 +2469,147 @@ CJSON_PUBLIC(cJSON *) cJSON_CreateString(const char *string)
     return item;
 }
 
+CJSON_PUBLIC(cJSON*) cJSON_DeepCopyFromObject(const cJSON* object)
+{
+    cJSON* next = NULL;
+    cJSON* r_object = cJSON_CreateObject();
+    if (r_object == NULL)
+    {
+        return NULL;
+    }
+    
+    next = object->child;
+    while (next != NULL)
+    {
+        
+        if (next->type & cJSON_False)
+        {
+            if (!cJSON_AddFalseToObject(r_object, next->string))
+            {
+                cJSON_Delete(r_object);
+                return NULL;
+            }
+            else
+            {
+                next = next->next;
+                continue;
+            }
+        }
+        if (next->type & cJSON_True)
+        {
+            if (!cJSON_AddTrueToObject(r_object, next->string))
+            {
+                cJSON_Delete(r_object);
+                return NULL;
+            }
+            else
+            {
+                next = next->next;
+                continue;
+            }
+        }
+        if (next->type & cJSON_NULL)
+        {
+            if (!cJSON_AddNullToObject(r_object, next->string))
+            {
+                cJSON_Delete(r_object);
+                return NULL;
+            }
+            else
+            {
+                next = next->next;
+                continue;
+            }
+        }
+        if (next->type & cJSON_Number)
+        {
+            if (!cJSON_AddNumberToObject(r_object, next->string, next->valuedouble))
+            {
+                cJSON_Delete(r_object);
+                return NULL;
+            }
+            else
+            {
+                next = next->next;
+                continue;
+            }
+        }
+        if (next->type & cJSON_String)
+        {
+            if (!cJSON_AddStringToObject(r_object, next->string, next->valuestring))
+            {
+                cJSON_Delete(r_object);
+                return NULL;
+            }
+            else
+            {
+                next = next->next;
+                continue;
+            }
+        }
+        if (next->type & cJSON_Raw)
+        {
+            if (!cJSON_AddRawToObject(r_object, next->string, next->valuestring))
+            {
+                cJSON_Delete(r_object);
+                return NULL;
+            }
+            else
+            {
+                next = next->next;
+                continue;
+            }
+        }
+        if (next->type & cJSON_Object)
+        {
+            cJSON* object_item = cJSON_DeepCopyFromObject(next);
+            if (object_item == NULL)
+            {
+                cJSON_Delete(r_object);
+                return NULL;
+            }
+            if (!add_item_to_object(r_object, next->string, object_item, &global_hooks, false))
+            {
+                cJSON_Delete(r_object);
+                cJSON_Delete(object_item);
+                return NULL;
+            }
+            else
+            {
+                next = next->next;
+                continue;
+            }
+        }
+        if (next->type & cJSON_Array)
+        {
+            cJSON* array = cJSON_DeepCopyFromObject(next);
+            if (array == NULL)
+            {
+                cJSON_Delete(r_object);
+                return NULL;
+            }
+            if (!add_item_to_object(r_object, next->string, array, &global_hooks, false))
+            {
+                cJSON_Delete(r_object);
+                cJSON_Delete(array);
+                return NULL;
+            }
+            else
+            {
+                next = next->next;
+                continue;
+            }
+        }
+        if (next->type & cJSON_Invalid)
+        {
+            cJSON_Delete(r_object);
+            return NULL;
+        }
+    }
+    return r_object;
+}
+
+
 CJSON_PUBLIC(cJSON *) cJSON_CreateStringReference(const char *string)
 {
     cJSON *item = cJSON_New_Item(&global_hooks);
@@ -2698,7 +2839,7 @@ CJSON_PUBLIC(cJSON *) cJSON_CreateStringArray(const char *const *strings, int co
     if (a && a->child) {
         a->child->prev = n;
     }
-
+    
     return a;
 }
 
