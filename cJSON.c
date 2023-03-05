@@ -2471,6 +2471,10 @@ CJSON_PUBLIC(cJSON *) cJSON_CreateString(const char *string)
 
 CJSON_PUBLIC(cJSON*) cJSON_DeepCopyFromObject(const cJSON* object)
 {
+    if (!object)
+    {
+        return NULL;
+    }
     cJSON* next = NULL;
     cJSON* r_object = cJSON_CreateObject();
     if (r_object == NULL)
