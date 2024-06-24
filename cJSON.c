@@ -2477,10 +2477,12 @@ CJSON_PUBLIC(cJSON*) cJSON_DeepCopyFromObject(const cJSON* object)
     }
     cJSON* next = NULL;
     cJSON* r_object = cJSON_CreateObject();
+    
     if (r_object == NULL)
     {
         return NULL;
     }
+    r_object->type = object->type;
     
     next = object->child;
     while (next != NULL)
@@ -2572,16 +2574,33 @@ CJSON_PUBLIC(cJSON*) cJSON_DeepCopyFromObject(const cJSON* object)
                 cJSON_Delete(r_object);
                 return NULL;
             }
-            if (!add_item_to_object(r_object, next->string, object_item, &global_hooks, false))
+            if (next->string)
             {
-                cJSON_Delete(r_object);
-                cJSON_Delete(object_item);
-                return NULL;
+                if (!add_item_to_object(r_object, next->string, object_item, &global_hooks, false))
+                {
+                    cJSON_Delete(r_object);
+                    cJSON_Delete(object_item);
+                    return NULL;
+                }
+                else
+                {
+                    next = next->next;
+                    continue;
+                }
             }
             else
             {
-                next = next->next;
-                continue;
+                if (!add_item_to_array(r_object, object_item))
+                {
+                    cJSON_Delete(r_object);
+                    cJSON_Delete(object_item);
+                    return NULL;
+                }
+                else
+                {
+                    next = next->next;
+                    continue;
+                }
             }
         }
         if (next->type & cJSON_Array)
@@ -2592,16 +2611,33 @@ CJSON_PUBLIC(cJSON*) cJSON_DeepCopyFromObject(const cJSON* object)
                 cJSON_Delete(r_object);
                 return NULL;
             }
-            if (!add_item_to_object(r_object, next->string, array, &global_hooks, false))
+            if (next->string)
             {
-                cJSON_Delete(r_object);
-                cJSON_Delete(array);
-                return NULL;
+                if (!add_item_to_object(r_object, next->string, array, &global_hooks, false))
+                {
+                    cJSON_Delete(r_object);
+                    cJSON_Delete(array);
+                    return NULL;
+                }
+                else
+                {
+                    next = next->next;
+                    continue;
+                }
             }
             else
             {
-                next = next->next;
-                continue;
+                if (!add_item_to_array(r_object, array))
+                {
+                    cJSON_Delete(r_object);
+                    cJSON_Delete(array);
+                    return NULL;
+                }
+                else
+                {
+                    next = next->next;
+                    continue;
+                }
             }
         }
         if (next->type & cJSON_Invalid)

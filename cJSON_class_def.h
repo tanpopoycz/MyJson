@@ -12,7 +12,7 @@
 /* json解析异常 */
 struct MyJsonParseError : public std::exception
 {
-	const char* what() 
+	const char* what() const throw()
 	{
 		return "Json parse error.";
 	}
@@ -21,7 +21,7 @@ struct MyJsonParseError : public std::exception
 /* json添加string类型 异常 */
 struct MyJsonAddStringError : public std::exception
 {
-	const char* what() 
+	const char* what() const throw()
 	{
 		return "Json add string error.";
 	}
@@ -30,7 +30,7 @@ struct MyJsonAddStringError : public std::exception
 /* 参数错误 */
 struct MyJsonParameterError : public std::exception
 {
-	const char* what()
+	const char* what() const throw()
 	{
 		return "MyJsonParameterError error.";
 	}
@@ -39,7 +39,7 @@ struct MyJsonParameterError : public std::exception
 /* json添加double类型 异常 */
 struct MyJsonAddNumError : public std::exception
 {
-	const char* what() 
+	const char* what() const throw()
 	{
 		return "Json add number error.";
 	}
@@ -48,7 +48,7 @@ struct MyJsonAddNumError : public std::exception
 /* json添加bool类型 异常 */
 struct MyJsonAddBoolError : public std::exception
 {
-	const char* what() 
+	const char* what() const throw()
 	{
 		return "Json add bool error.";
 	}
@@ -57,16 +57,25 @@ struct MyJsonAddBoolError : public std::exception
 /* json添加对象类型 异常 */
 struct MyJsonAddObjError : public std::exception
 {
-	const char* what() 
+	const char* what() const throw()
 	{
 		return "Json add object error.";
 	}
 };
 
+/* json添加对象类型 异常 */
+struct MyJsonAddArrayError : public std::exception
+{
+    const char* what() const throw()
+    {
+        return "Json add MyJsonAddArrayError error.";
+    }
+};
+
 /* json转化为字符串  异常 */
 struct MyJsonToStringError : public std::exception
 {
-	const char* what() 
+	const char* what() const throw()
 	{
 		return "Json to string error.";
 	}
@@ -75,7 +84,7 @@ struct MyJsonToStringError : public std::exception
 /* MyJson类构造失败  异常 */
 struct MyJsonConstructorError : public std::exception
 {
-	const char* what() 
+	const char* what() const throw()
 	{
 		return "MyJson Constructor failed";
 	}
@@ -84,7 +93,7 @@ struct MyJsonConstructorError : public std::exception
 /* MyJson类拷贝构造失败  异常 */
 struct MyJsonCopyConstructorError : public std::exception
 {
-	const char* what() 
+	const char* what() const throw()
 	{
 		return "MyJson copy Constructor failed";
 	}
@@ -94,7 +103,7 @@ struct MyJsonCopyConstructorError : public std::exception
 /* josn转换成string  异常 */
 struct MyJsonJsonToStringError : public std::exception
 {
-	const char* what() 
+	const char* what() const throw()
 	{
 		return "MyJson json to string failed";
 	}
@@ -103,10 +112,19 @@ struct MyJsonJsonToStringError : public std::exception
 /* josn转换成string  异常 */
 struct MyJsonJsonToNumberError : public std::exception
 {
-	const char* what() 
+	const char* what() const throw()
 	{
 		return "MyJson json to int error";
 	}
+};
+
+/* josn转换成int  异常 */
+struct MyJsonJsonToVectorError : public std::exception
+{
+    const char* what() const throw()
+    {
+        return "MyJson json to vector error";
+    }
 };
 
 namespace MyCJson
@@ -249,6 +267,23 @@ namespace MyCJson
 				throw MyJsonConstructorError();
 			}
 		}
+        MyCJson(cJSON* obj, bool bIsNotDelete)
+        {
+            if (!obj)
+            {
+                throw MyJsonConstructorError();
+            }
+            if (bIsNotDelete)
+            {
+                m_jsonObject_notDelete = obj;
+                m_jsonObject = NULL;
+            }
+            else 
+            {
+                m_jsonObject_notDelete = NULL;
+                m_jsonObject = obj;
+            }
+        }
 		~MyCJson()
 		{
 			/* 不释放m_jsonObject_notDelete，会在最外面的对象析构时释放 */
@@ -330,7 +365,46 @@ namespace MyCJson
 				}
 			}
 		}
-
+        
+        /* 添加const unsigned int到json */
+        void add_to_json(const char* key, const unsigned int value)
+        {
+            if (m_jsonObject_notDelete)
+            {
+                if (cJSON_AddNumberToObject(m_jsonObject_notDelete, key, (double)value) == NULL)
+                {
+                    throw MyJsonAddNumError();
+                }
+            }
+            else
+            {
+                if (cJSON_AddNumberToObject(m_jsonObject, key, (double)value) == NULL)
+                {
+                    throw MyJsonAddNumError();
+                }
+            }
+        }
+        
+        ///* 添加unsigned int到json */
+        //void add_to_json(const char* key, unsigned int value)
+        //{
+        //	if (m_jsonObject_notDelete)
+        //	{
+        //		if (cJSON_AddNumberToObject(m_jsonObject_notDelete, key, (double)value) == NULL)
+        //		{
+        //			throw MyJsonAddNumError();
+        //		}
+        //	}
+        //	else
+        //	{
+        //		if (cJSON_AddNumberToObject(m_jsonObject, key, (double)value) == NULL)
+        //		{
+        //			throw MyJsonAddNumError();
+        //		}
+        //	}
+        //}
+        
+        
 		/* 添加bool到json */
 		void add_to_json(const char* key, const bool value)
 		{
@@ -389,12 +463,58 @@ namespace MyCJson
 			}
 			/* 添加的如果是自定义的结构体T类型变量，则调用结构体里的to_json函数，
 				to_json(cJSON* obj, const T& value) */
+            /* 使用 MyCJson(cJSON* obj) 构造函数创建子对象，子对象内部cJSON指针内存由父对象释放 */
 			MyCJson J(obj);
 			value.to_json(J, value);
 
 		}
 
-
+        /* 向array中添加元素，只有自定义结构体可以定义array列表，基础类型不能定义 */
+        template<typename T>
+        void add_to_array(const T& value)
+        {
+            cJSON* obj = cJSON_CreateObject();
+            if (NULL == obj)
+            {
+                throw MyJsonAddObjError();
+            }
+            MyCJson J(obj);
+            value.to_json(J, value);
+            if (m_jsonObject_notDelete)
+            {
+                cJSON_AddItemToArray(m_jsonObject_notDelete, obj);
+            }
+            else
+            {
+                cJSON_AddItemToArray(m_jsonObject, obj);
+            }
+        }
+        
+        /* 添加vector列表到json */
+        template <typename T>
+        void add_to_json(const char* key, std::vector<T> value)
+        {
+            cJSON* obj = NULL;
+            if (m_jsonObject_notDelete)
+            {
+                obj = cJSON_AddArrayToObject(m_jsonObject_notDelete, key);
+            }
+            else
+            {
+                obj = cJSON_AddArrayToObject(m_jsonObject, key);
+            }
+            if (NULL == obj)
+            {
+                throw MyJsonAddArrayError();
+            }
+            MyCJson J(obj);
+            for (int i = 0; i < value.size(); i++)
+            {
+                J.add_to_array(value[i]);
+            }
+        }
+        
+        
 		/* json赋值到char* */
 		void get_to(char* value, const char* key)
 		{
@@ -403,7 +523,14 @@ namespace MyCJson
 				throw MyJsonParameterError();
 			}
 			const cJSON* j = NULL;
-			j = cJSON_GetObjectItemCaseSensitive(m_jsonObject, key);
+			if (m_jsonObject)
+            {
+                j = cJSON_GetObjectItemCaseSensitive(m_jsonObject, key);
+            }
+            else
+            {
+                j = cJSON_GetObjectItemCaseSensitive(m_jsonObject_notDelete, key);
+            }
 			if (cJSON_IsString(j) && (j->valuestring != NULL))
 			{
 				strncpy(value, j->valuestring, strlen(j->valuestring));
@@ -422,7 +549,14 @@ namespace MyCJson
 				throw MyJsonParameterError();
 			}
 			const cJSON* j = NULL;
-			j = cJSON_GetObjectItemCaseSensitive(m_jsonObject, key);
+			if (m_jsonObject)
+            {
+                j = cJSON_GetObjectItemCaseSensitive(m_jsonObject, key);
+            }
+            else
+            {
+                j = cJSON_GetObjectItemCaseSensitive(m_jsonObject_notDelete, key);
+            }
 			if (cJSON_IsString(j) && (j->valuestring != NULL))
 			{
 				value = j->valuestring;
@@ -441,7 +575,14 @@ namespace MyCJson
 				throw MyJsonParameterError();
 			}
 			const cJSON* j = NULL;
-			j = cJSON_GetObjectItemCaseSensitive(m_jsonObject, key);
+			if (m_jsonObject)
+            {
+                j = cJSON_GetObjectItemCaseSensitive(m_jsonObject, key);
+            }
+            else
+            {
+                j = cJSON_GetObjectItemCaseSensitive(m_jsonObject_notDelete, key);
+            }
 			if (cJSON_IsNumber(j))
 			{
 				value = j->valuedouble;
@@ -460,7 +601,14 @@ namespace MyCJson
 				throw MyJsonParameterError();
 			}
 			const cJSON* j = NULL;
-			j = cJSON_GetObjectItemCaseSensitive(m_jsonObject, key);
+			if (m_jsonObject)
+            {
+                j = cJSON_GetObjectItemCaseSensitive(m_jsonObject, key);
+            }
+            else
+            {
+                j = cJSON_GetObjectItemCaseSensitive(m_jsonObject_notDelete, key);
+            }
 			if (cJSON_IsNumber(j))
 			{
 				value = j->valueint;
@@ -471,18 +619,67 @@ namespace MyCJson
 			}
 		}
 
-
-		//template<typename T>
-		//void get_to(T& value) const
-		//{
-		//	value.from_json(*this, value);
-		//}
-
-		void set_json(const cJSON* j) 
-		{
-			cJSON_Delete(m_jsonObject);
-			m_jsonObject = cJSON_DeepCopyFromObject(j);
-		}
+        /* json赋值到number */
+        void get_to(unsigned int& value, const char* key)
+        {
+            if ((!key))
+            {
+                throw MyJsonParameterError();
+            }
+            const cJSON* j = NULL;
+            if (m_jsonObject)
+            {
+                j = cJSON_GetObjectItemCaseSensitive(m_jsonObject, key);
+            }
+            else
+            {
+                j = cJSON_GetObjectItemCaseSensitive(m_jsonObject_notDelete, key);
+            }
+            if (cJSON_IsNumber(j))
+            {
+                value = j->valueint;
+            }
+            else
+            {
+                throw MyJsonJsonToNumberError();
+            }
+        }
+            
+		/* json赋值到vector */
+        template <typename T>
+        void get_to(std::vector<T>& value, const char* key)
+        {
+            if ((!key))
+            {
+                throw MyJsonParameterError();
+            }
+            const cJSON* j = NULL;
+            if (m_jsonObject)
+            {
+                j = cJSON_GetObjectItemCaseSensitive(m_jsonObject, key);
+            }
+            else
+            {
+                j = cJSON_GetObjectItemCaseSensitive(m_jsonObject_notDelete, key);
+            }
+            if (cJSON_IsArray(j))
+            {
+                /* 如果类型是array, 遍历 */
+                cJSON* item = NULL;
+                cJSON_ArrayForEach(item, j)
+                {
+                    T temp;
+                    cJSON* tj = cJSON_DeepCopyFromObject(item);
+                    MyCJson mj(tj, false);
+                    temp.from_json(mj, temp);
+                    value.emplace_back(temp);
+                }
+            }
+            else
+            {
+                throw MyJsonJsonToVectorError();
+            }
+        }
 
 
 		template<typename T>
@@ -507,6 +704,34 @@ namespace MyCJson
 
 
 
+
+        void set_json(const cJSON* j) 
+        {
+            cJSON_Delete(m_jsonObject);
+            m_jsonObject = cJSON_DeepCopyFromObject(j);
+        }
+
+        void parse(const std::string json_string)
+        {
+            cJSON* j = cJSON_Parse(json_string.c_str());
+            if (!j)
+            {
+                throw MyJsonParseError();
+            }
+            else
+            {
+                cJSON_Delete(m_jsonObject);
+                cJSON_Delete(m_jsonObject_notDelete);
+                m_jsonObject = j;
+                m_jsonObject_notDelete = NULL;
+            }
+        }
+
+
+
+
+
+
 		/* json转化为字符串 */
 		std::string dump()
 		{
@@ -516,7 +741,10 @@ namespace MyCJson
 			{
 				throw MyJsonToStringError();
 			}
-			return std::string(string);
+			std::string str = std::string(string);
+
+            free(string);
+            return str;
 		}
 
 		const cJSON* get_json_ptr() const
@@ -638,6 +866,11 @@ typedef struct Mail
 	MY_JSON_HELPER(Mail, status, mail, status1);
 }MAIL;
 
+typedef struct Mails
+{
+    std::vector<MAIL> mail_list;
+    MY_JSON_HELPER(Mails, mail_list);
+}MAILS;
 
 
 #endif // !__CJSON_CLASS_DEF_H__
